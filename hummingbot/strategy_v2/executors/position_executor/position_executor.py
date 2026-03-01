@@ -267,7 +267,7 @@ class PositionExecutor(ExecutorBase):
         :return: The cumulative fees in quote asset.
         """
         orders = [self._open_order, self._close_order]
-        return sum([order.cum_fees_quote for order in orders if order])
+        return sum((order.cum_fees_quote for order in orders if order), Decimal("0"))
 
     def get_net_pnl_pct(self) -> Decimal:
         """

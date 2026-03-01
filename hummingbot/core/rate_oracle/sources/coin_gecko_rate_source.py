@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import os
 from asyncio import Task
 from decimal import Decimal
 from typing import Dict, List, Optional, Union
@@ -10,6 +11,28 @@ from hummingbot.core.utils import async_ttl_cache
 from hummingbot.core.utils.async_utils import safe_gather
 from hummingbot.data_feed.coin_gecko_data_feed import CoinGeckoDataFeed
 from hummingbot.data_feed.coin_gecko_data_feed.coin_gecko_constants import COOLOFF_AFTER_BAN, CoinGeckoAPITier
+
+
+def _coingecko_prices_cache_ttl() -> float:
+    """
+    Returns CoinGecko prices cache TTL in seconds.
+
+    Override via `HB_COINGECKO_PRICES_CACHE_TTL` (must be > 0).
+    """
+    default_ttl = COOLOFF_AFTER_BAN
+    raw_ttl = os.environ.get("HB_COINGECKO_PRICES_CACHE_TTL")
+    if raw_ttl is None:
+        return default_ttl
+    try:
+        parsed_ttl = float(raw_ttl)
+        if parsed_ttl > 0:
+            return parsed_ttl
+    except Exception:
+        pass
+    return default_ttl
+
+
+COINGECKO_PRICES_CACHE_TTL = _coingecko_prices_cache_ttl()
 
 
 class CoinGeckoRateSource(RateSourceBase):
@@ -93,7 +116,7 @@ class CoinGeckoRateSource(RateSourceBase):
 
         return try_raise_event
 
-    @async_ttl_cache(ttl=COOLOFF_AFTER_BAN, maxsize=1)
+    @async_ttl_cache(ttl=COINGECKO_PRICES_CACHE_TTL, maxsize=1)
     async def get_prices(self, quote_token: Optional[str] = None) -> Dict[str, Decimal]:
         """
         Fetches the first 2500 CoinGecko prices ordered by market cap to ~ 500K USD

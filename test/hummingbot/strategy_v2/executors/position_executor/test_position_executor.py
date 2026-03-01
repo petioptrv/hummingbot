@@ -95,6 +95,13 @@ class TestPositionExecutor(IsolatedAsyncioWrapperTestCase):
         self.assertEqual(position_executor.config.triple_barrier_config.trailing_stop, None)
         self.assertIsInstance(position_executor.logger(), HummingbotLogger)
 
+    def test_net_pnl_quote_with_no_orders(self):
+        position_config = self.get_position_config_market_short()
+        position_executor = PositionExecutor(self.strategy, position_config)
+
+        self.assertEqual(position_executor.cum_fees_quote, Decimal("0"))
+        self.assertEqual(position_executor.net_pnl_quote, Decimal("0"))
+
     def get_position_executor_running_from_config(self, position_config):
         position_executor = PositionExecutor(self.strategy, position_config)
         position_executor._status = RunnableStatus.RUNNING
