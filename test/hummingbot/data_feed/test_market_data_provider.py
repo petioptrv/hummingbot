@@ -199,7 +199,7 @@ class TestMarketDataProvider(IsolatedAsyncioWrapperTestCase):
         self.assertEqual(result, {"BTC-USDT": 100})
         connector._get_last_traded_price.side_effect = Exception("Error")
         result = await self.provider._safe_get_last_traded_prices(connector, ["BTC-USDT"])
-        self.assertEqual(result, {"BTC-USDT": Decimal("0")})
+        self.assertEqual(result, {})
 
     def test_remove_rate_sources(self):
         # Test removing regular connector rate sources
@@ -332,6 +332,24 @@ class TestMarketDataProvider(IsolatedAsyncioWrapperTestCase):
                     await self.provider.update_rates_task()
 
         mock_oracle_instance.set_price.assert_called_with("BTC-USDT", Decimal("50000"))
+
+    @patch('hummingbot.core.rate_oracle.rate_oracle.RateOracle.get_instance')
+    async def test_update_rates_task_regular_connector_skips_zero_prices(self, mock_rate_oracle):
+        mock_oracle_instance = MagicMock()
+        mock_rate_oracle.return_value = mock_oracle_instance
+
+        mock_connector = AsyncMock()
+        self.provider._rate_sources = {"binance": mock_connector}
+
+        connector_pair = ConnectorPair(connector_name="binance", trading_pair="BTC-USDT")
+        self.provider._rates_required.add_or_update("binance", connector_pair)
+
+        with patch.object(self.provider, '_safe_get_last_traded_prices', return_value={"BTC-USDT": Decimal("0")}):
+            with patch('asyncio.sleep', side_effect=[None, asyncio.CancelledError()]):
+                with self.assertRaises(asyncio.CancelledError):
+                    await self.provider.update_rates_task()
+
+        mock_oracle_instance.set_price.assert_not_called()
 
     @patch('hummingbot.core.gateway.gateway_http_client.GatewayHttpClient.get_instance')
     async def test_update_rates_task_gateway_error(self, mock_gateway_client):

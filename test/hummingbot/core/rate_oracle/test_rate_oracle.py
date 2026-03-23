@@ -80,6 +80,29 @@ class RateOracleTest(IsolatedAsyncioWrapperTestCase):
         rate = find_rate(prices, "HBOT-GBP")
         self.assertEqual(rate, Decimal("75"))
 
+    def test_find_rate_ignores_zero_reverse_price_and_uses_alternative_route(self):
+        prices = {
+            "ETH-PLEX": Decimal("0"),
+            "PLEX-USDT": Decimal("10"),
+            "USDT-ETH": Decimal("0.5"),
+        }
+
+        rate = find_rate(prices, "PLEX-ETH")
+
+        self.assertEqual(rate, Decimal("5"))
+
+    def test_find_rate_ignores_zero_common_denominator_price_and_uses_next_route(self):
+        prices = {
+            "PLEX-USDT": Decimal("10"),
+            "ETH-USDT": Decimal("0"),
+            "PLEX-BTC": Decimal("20"),
+            "ETH-BTC": Decimal("5"),
+        }
+
+        rate = find_rate(prices, "PLEX-ETH")
+
+        self.assertEqual(rate, Decimal("4"))
+
     def test_rate_oracle_single_instance_rate_source_reset_after_configuration_change(self):
         config_map = ClientConfigAdapter(ClientConfigMap())
         config_map.rate_oracle_source = "binance"

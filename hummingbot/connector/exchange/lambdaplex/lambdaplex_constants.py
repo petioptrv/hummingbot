@@ -73,21 +73,42 @@ ONE_SECOND = 1
 
 MAX_REQUEST = sys.maxsize
 
+
+def _read_limit_from_env(var_name: str, default: int) -> int:
+    raw_value = os.getenv(var_name)
+    return default if raw_value is None else int(raw_value)
+
+
+# Lambdaplex supports materially higher private order throughput than the generic exchange defaults
+# this connector started from. Keep these buckets configurable for containerized/headless deployments.
+REQUEST_WEIGHT_LIMIT_PER_MINUTE = _read_limit_from_env(
+    "LAMBDAPLEX_REQUEST_WEIGHT_LIMIT_PER_MINUTE",
+    12_000,
+)
+API_KEY_REQUESTS_LIMIT_PER_MINUTE = _read_limit_from_env(
+    "LAMBDAPLEX_API_KEY_REQUESTS_LIMIT_PER_MINUTE",
+    12_000,
+)
+ORDERS_LIMIT_PER_10_SECONDS = _read_limit_from_env(
+    "LAMBDAPLEX_ORDERS_LIMIT_PER_10S",
+    2_000,
+)
+
 RATE_LIMITS = [
     # Pools
     RateLimit(
         limit_id=REQUEST_WEIGHT,
-        limit=1_200,
+        limit=REQUEST_WEIGHT_LIMIT_PER_MINUTE,
         time_interval=ONE_MINUTE,
     ),
     RateLimit(
         limit_id=API_KEY_REQUESTS_WEIGHT,
-        limit=6_000,
+        limit=API_KEY_REQUESTS_LIMIT_PER_MINUTE,
         time_interval=ONE_MINUTE,
     ),
     RateLimit(
         limit_id=ORDERS_WEIGHT,
-        limit=20,
+        limit=ORDERS_LIMIT_PER_10_SECONDS,
         time_interval=10 * ONE_SECOND,
     ),
     # Weighted Limits

@@ -3,7 +3,7 @@ set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
   echo "Usage: ./docker-build.sh <image:tag>" >&2
-  echo "Example: ./docker-build.sh us-docker.pkg.dev/<project>/<repo>/hummingbot-lambdaplex:0.1.2" >&2
+  echo "Example: ./docker-build.sh us-docker.pkg.dev/rational-aria-186218/lambdaplex-public/plex-hbot:0.2.0" >&2
   exit 2
 fi
 

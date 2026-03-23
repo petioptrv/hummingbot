@@ -16,7 +16,7 @@ def find_rate(prices: Dict[str, Decimal], pair: str) -> Decimal:
     :param prices: The dictionary of trading pairs and their prices
     :param pair: The trading pair
     '''
-    if pair in prices:
+    if pair in prices and prices[pair] > Decimal("0"):
         return prices[pair]
     base, quote = split_hb_trading_pair(trading_pair=pair)
     base = unwrap_token_symbol(base)
@@ -24,14 +24,16 @@ def find_rate(prices: Dict[str, Decimal], pair: str) -> Decimal:
     if base == quote:
         return Decimal("1")
     reverse_pair = combine_to_hb_trading_pair(base=quote, quote=base)
-    if reverse_pair in prices:
+    if reverse_pair in prices and prices[reverse_pair] > Decimal("0"):
         return Decimal("1") / prices[reverse_pair]
     base_prices = {k: v for k, v in prices.items() if k.startswith(f"{base}-")}
     for base_pair, proxy_price in base_prices.items():
+        if proxy_price <= Decimal("0"):
+            continue
         link_quote = split_hb_trading_pair(base_pair)[1]
         link_pair = combine_to_hb_trading_pair(base=link_quote, quote=quote)
-        if link_pair in prices:
+        if link_pair in prices and prices[link_pair] > Decimal("0"):
             return proxy_price * prices[link_pair]
         common_denom_pair = combine_to_hb_trading_pair(base=quote, quote=link_quote)
-        if common_denom_pair in prices:
+        if common_denom_pair in prices and prices[common_denom_pair] > Decimal("0"):
             return proxy_price / prices[common_denom_pair]

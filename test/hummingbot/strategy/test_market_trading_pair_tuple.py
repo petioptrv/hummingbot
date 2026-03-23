@@ -27,6 +27,7 @@ s_decimal_0 = Decimal(0)
 
 
 class MarketTradingPairTupleUnitTest(unittest.TestCase):
+    level = 0
 
     start: pd.Timestamp = pd.Timestamp("2019-01-01", tz="UTC")
     end: pd.Timestamp = pd.Timestamp("2019-01-01 01:00:00", tz="UTC")
@@ -40,8 +41,11 @@ class MarketTradingPairTupleUnitTest(unittest.TestCase):
     clock_tick_size = 10
 
     def setUp(self):
+        self.log_records = []
         self.clock: Clock = Clock(ClockMode.BACKTEST, self.clock_tick_size, self.start_timestamp, self.end_timestamp)
         self.market: MockPaperExchange = MockPaperExchange()
+        self.market.logger().setLevel(1)
+        self.market.logger().addHandler(self)
         self.market.set_balanced_order_book(trading_pair=self.trading_pair,
                                             mid_price=100,
                                             min_price=50,
@@ -57,6 +61,19 @@ class MarketTradingPairTupleUnitTest(unittest.TestCase):
         )
 
         self.market_info = MarketTradingPairTuple(self.market, self.trading_pair, self.base_asset, self.quote_asset)
+
+    def tearDown(self):
+        self.market.logger().removeHandler(self)
+        super().tearDown()
+
+    def handle(self, record):
+        self.log_records.append(record)
+
+    def _count_logged(self, log_level: str, message: str) -> int:
+        return sum(
+            record.levelname == log_level and record.getMessage() == message
+            for record in self.log_records
+        )
 
     @staticmethod
     def simulate_limit_order_fill(market: MockPaperExchange, limit_order: LimitOrder, timestamp: float = 0):
@@ -237,6 +254,34 @@ class MarketTradingPairTupleUnitTest(unittest.TestCase):
         # Check sell price
         expected_sell_price: Decimal = max([entry.price for entry in self.market.order_book_bid_entries(self.trading_pair)])
         self.assertEqual(expected_sell_price, self.market_info.get_price(is_buy=False))
+
+    def test_get_price_logs_empty_order_book_once_until_it_recovers(self):
+        empty_message = f"Ask orderbook for {self.trading_pair} is empty."
+
+        self.market.new_empty_order_book(self.trading_pair)
+
+        first_price = self.market_info.get_price(is_buy=True)
+        second_price = self.market_info.get_price(is_buy=True)
+
+        self.assertTrue(first_price.is_nan())
+        self.assertTrue(second_price.is_nan())
+        self.assertEqual(1, self._count_logged("WARNING", empty_message))
+
+        self.market.set_balanced_order_book(trading_pair=self.trading_pair,
+                                            mid_price=100,
+                                            min_price=50,
+                                            max_price=150,
+                                            price_step_size=1,
+                                            volume_step_size=10)
+        recovered_price = self.market_info.get_price(is_buy=True)
+
+        self.assertFalse(recovered_price.is_nan())
+
+        self.market.new_empty_order_book(self.trading_pair)
+        third_price = self.market_info.get_price(is_buy=True)
+
+        self.assertTrue(third_price.is_nan())
+        self.assertEqual(2, self._count_logged("WARNING", empty_message))
 
     def test_get_price_by_type(self):
         # Check PriceType.BestAsk

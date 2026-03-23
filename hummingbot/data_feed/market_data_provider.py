@@ -169,7 +169,9 @@ class MarketDataProvider:
                             if isinstance(rate, Exception):
                                 self.logger().error(f"Error fetching price for {trading_pair}: {rate}")
                             elif rate and "price" in rate:
-                                rate_oracle.set_price(trading_pair, Decimal(rate["price"]))
+                                price = Decimal(rate["price"])
+                                if price > Decimal("0"):
+                                    rate_oracle.set_price(trading_pair, price)
                     except Exception as e:
                         self.logger().error(f"Error fetching gateway prices: {e}", exc_info=True)
 
@@ -181,7 +183,8 @@ class MarketDataProvider:
                             connector=connector_instance,
                             trading_pairs=[pair.trading_pair for pair in connector_pairs])
                         for pair, rate in prices.items():
-                            rate_oracle.set_price(pair, rate)
+                            if rate > Decimal("0"):
+                                rate_oracle.set_price(pair, rate)
                     except Exception as e:
                         self.logger().error(f"Error fetching prices from {connector}: {e}", exc_info=True)
 
@@ -792,7 +795,11 @@ class MarketDataProvider:
         try:
             tasks = [self._safe_get_last_traded_price(connector, trading_pair) for trading_pair in trading_pairs]
             prices = await asyncio.wait_for(asyncio.gather(*tasks), timeout=timeout)
-            return {pair: Decimal(rate) for pair, rate in zip(trading_pairs, prices)}
+            return {
+                pair: Decimal(rate)
+                for pair, rate in zip(trading_pairs, prices)
+                if rate is not None and Decimal(rate) > Decimal("0")
+            }
         except Exception as e:
             logging.error(f"Error getting last traded prices in connector {connector} for trading pairs {trading_pairs}: {e}")
             return {}
@@ -803,4 +810,4 @@ class MarketDataProvider:
             return Decimal(last_traded)
         except Exception as e:
             logging.error(f"Error getting last traded price in connector {connector} for trading pair {trading_pair}: {e}")
-            return Decimal(0)
+            return None

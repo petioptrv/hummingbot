@@ -22,7 +22,7 @@ s_float_NaN = float("nan")
 s_decimal_NaN = Decimal("nan")
 s_decimal_0 = Decimal(0)
 
-DEFAULT_EMPTY_ORDER_BOOK_WARNING_INTERVAL = 60.0
+DEFAULT_EMPTY_ORDER_BOOK_WARNING_INTERVAL = 0.0
 
 
 def _get_empty_order_book_warning_interval() -> float:
@@ -30,7 +30,9 @@ def _get_empty_order_book_warning_interval() -> float:
     Returns the interval (in seconds) to rate-limit empty order book warnings.
 
     Can be overridden via the `HB_EMPTY_ORDER_BOOK_WARNING_INTERVAL` environment variable.
-    - Set to 0 (or a negative value) to disable the warning entirely.
+    - Set to 0 to log only the first empty-book warning until the book recovers.
+    - Set to a positive value to log a reminder while the book stays empty.
+    - Set to a negative value to disable the warning entirely.
     """
     raw = os.environ.get("HB_EMPTY_ORDER_BOOK_WARNING_INTERVAL")
     if raw is None:
@@ -192,13 +194,17 @@ cdef class ExchangeBase(ConnectorBase):
             top_price = Decimal(str(order_book.c_get_price(is_buy)))
         except EnvironmentError as e:
             interval = <double>EMPTY_ORDER_BOOK_WARNING_INTERVAL
-            if interval > 0:
+            if interval >= 0:
                 key = (trading_pair, <bint>is_buy)
-                now = <double>time.time()
                 last_warning_ts = empty_warning_ts.get(key)
-                if last_warning_ts is None or now - <double>last_warning_ts >= interval:
-                    empty_warning_ts[key] = now
+                if last_warning_ts is None:
+                    empty_warning_ts[key] = <double>time.time()
                     self.logger().warning(f"{'Ask' if is_buy else 'Bid'} orderbook for {trading_pair} is empty.")
+                elif interval > 0:
+                    now = <double>time.time()
+                    if now - <double>last_warning_ts >= interval:
+                        empty_warning_ts[key] = now
+                        self.logger().warning(f"{'Ask' if is_buy else 'Bid'} orderbook for {trading_pair} is empty.")
             return s_decimal_NaN
         # Once the book is healthy again, allow the next empty-book occurrence to log immediately.
         if empty_warning_ts:
